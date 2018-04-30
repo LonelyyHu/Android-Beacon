@@ -13,12 +13,13 @@ import android.support.v4.app.NotificationCompat
 import android.support.v4.content.ContextCompat
 import kotlinx.android.synthetic.main.activity_main.*
 import android.app.NotificationChannel
+import android.content.Intent
 import android.os.Build
 import android.support.annotation.RequiresApi
 import java.math.RoundingMode
 
 
-class MainActivity : AppCompatActivity(), BeaconConsumer {
+class MainActivity : AppCompatActivity() {
 
     lateinit var beaconManager: BeaconManager
 
@@ -26,29 +27,87 @@ class MainActivity : AppCompatActivity(), BeaconConsumer {
             Manifest.permission.ACCESS_COARSE_LOCATION
     )
 
+    val rangeNotifier = RangeNotifier { beacons, p1 ->
+        beacons?.forEach {
+
+            val dis = it.distance.toBigDecimal().setScale(2, RoundingMode.HALF_UP).toFloat()
+
+            Log.wtf("MainActivity",
+                    "address:${it.bluetoothAddress}, rssi:${it.rssi}, id1:${it.id1}, dis:$dis, measureCount:${it.measurementCount}")
+
+
+
+            val logStr = "rssi:${it.rssi}, dis:$dis\n"
+
+            runOnUiThread {
+                tv_log.append(logStr)
+                scroll_view.smoothScrollTo(0, tv_log.bottom)
+            }
+
+        }
+    }
+
+    val monitorNotifier = object : MonitorNotifier {
+        override fun didDetermineStateForRegion(state: Int, p1: Region?) {
+            Log.wtf("MainActivity", "didDetermineStateForRegion =>")
+
+            if (state == MonitorNotifier.INSIDE) {
+                sendRegionChangeNotification(true)
+            } else {
+                sendRegionChangeNotification(false)
+            }
+
+        }
+
+        override fun didEnterRegion(p0: Region?) {
+            Log.wtf("MainActivity", "didEnterRegion =>")
+        }
+
+        override fun didExitRegion(p0: Region?) {
+            Log.wtf("MainActivity", "didExitRegion =>")
+        }
+    }
+
     companion object {
         const val REQ_PERMISSION_CODE = 100
-        val CHANNEL_ID = "Beacon Notify Channel"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        switch_scan.setOnCheckedChangeListener { buttonView, isChecked ->
+        BeaconScanService.startService(this, Constant.ACTION_SERVICE_START)
 
-            Log.wtf("MainActivity", "onCreate => isChecked:$isChecked")
+        sw_show.setOnCheckedChangeListener { buttonView, isChecked ->
+
+            Log.wtf("MainActivity", "is show switch checked: $isChecked")
+
+            beaconManager = BeaconManager.getInstanceForApplication(this)
+
 
             if (isChecked) {
-                startBeaconScan()
+                beaconManager.addMonitorNotifier(monitorNotifier)
+                beaconManager.addRangeNotifier(rangeNotifier)
             } else {
-                stopBeaconScan()
+                beaconManager.removeMonitorNotifier(monitorNotifier)
+                beaconManager.removeRangeNotifier(rangeNotifier)
+            }
+
+        }
+
+        tb_fg_service.setOnCheckedChangeListener { compoundButton, isChecked ->
+
+            Log.wtf("MainActivity","is foreground srvice checked: $isChecked")
+
+            if (isChecked) {
+                BeaconScanService.startService(this, Constant.ACTION_START_FOREGROUND)
+            } else {
+                BeaconScanService.startService(this, Constant.ACTION_STOP_FOREGROUND)
             }
 
         }
 
         checkPermissions()
-        initBeaconManager()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             initNotification()
@@ -56,14 +115,11 @@ class MainActivity : AppCompatActivity(), BeaconConsumer {
 
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        beaconManager.unbind(this)
-    }
+
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun initNotification() {
-        val channelBeacon = NotificationChannel(CHANNEL_ID, "Channel Beacon", NotificationManager.IMPORTANCE_HIGH)
+        val channelBeacon = NotificationChannel(Constant.NOTIFICATION_CHANNEL_ID, "Channel Beacon", NotificationManager.IMPORTANCE_HIGH)
         channelBeacon.description = "Beacon Notify"
         channelBeacon.enableLights(true)
         channelBeacon.enableVibration(true)
@@ -72,89 +128,9 @@ class MainActivity : AppCompatActivity(), BeaconConsumer {
         notificationManager.createNotificationChannel(channelBeacon)
     }
 
-    private fun initBeaconManager() {
-
-        beaconManager = BeaconManager.getInstanceForApplication(applicationContext)
-
-        Log.wtf("MainActivity", "initBeaconManager => beaconManager:$beaconManager")
-
-        beaconManager.beaconParsers.add(BeaconInfo.getBeaconParsor())
-        beaconManager.bind(this)
-    }
-
-
-    private fun startBeaconScan() {
-        
-        Log.wtf("MainActivity", "startBeaconScan =>")
-        
-        beaconManager.startRangingBeaconsInRegion(BeaconInfo.getRangingRegion())
-        beaconManager.startMonitoringBeaconsInRegion(BeaconInfo.getMonitorRegion())
-
-        addBeaconRangeNotifier()
-        addBeaconMonitorNotifier()
-    }
-
-    private fun stopBeaconScan() {
-        beaconManager.stopRangingBeaconsInRegion(BeaconInfo.getRangingRegion())
-        beaconManager.stopMonitoringBeaconsInRegion(BeaconInfo.getMonitorRegion())
-
-        beaconManager.removeAllRangeNotifiers()
-        beaconManager.removeAllMonitorNotifiers()
-    }
-
-    override fun onBeaconServiceConnect() {
-    }
-
-    private fun addBeaconMonitorNotifier() {
-        beaconManager.addMonitorNotifier(object : MonitorNotifier {
-            override fun didDetermineStateForRegion(state: Int, p1: Region?) {
-                Log.wtf("MainActivity", "didDetermineStateForRegion =>")
-
-                if (state == MonitorNotifier.INSIDE) {
-                    sendRegionChangeNotification(true)
-                } else {
-                    sendRegionChangeNotification(false)
-                }
-
-            }
-
-            override fun didEnterRegion(p0: Region?) {
-                Log.wtf("MainActivity", "didEnterRegion =>")
-            }
-
-            override fun didExitRegion(p0: Region?) {
-                Log.wtf("MainActivity", "didExitRegion =>")
-            }
-        })
-    }
-
-    private fun addBeaconRangeNotifier() {
-        beaconManager.addRangeNotifier(object : RangeNotifier {
-            override fun didRangeBeaconsInRegion(beacons: MutableCollection<Beacon>?, p1: Region?) {
-                beacons?.forEach {
-
-                    val dis = it.distance.toBigDecimal().setScale(2, RoundingMode.HALF_UP).toFloat()
-
-                    Log.wtf("MainActivity",
-                            "address:${it.bluetoothAddress}, rssi:${it.rssi}, id1:${it.id1}, dis:$dis, measureCount:${it.measurementCount}")
-
-
-
-                    val logStr = "rssi:${it.rssi}, dis:$dis\n"
-
-                    runOnUiThread {
-                        tv_log.append(logStr)
-                        scroll_view.smoothScrollTo(0, tv_log.bottom)
-                    }
-
-                }
-            }
-        })
-    }
-
     private fun sendRegionChangeNotification(isInRegion: Boolean) {
 
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, Constant.NOTIFICATION_CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_dialog_alert)
                 .setContentTitle("Region Change Detect")
 
@@ -166,7 +142,7 @@ class MainActivity : AppCompatActivity(), BeaconConsumer {
         }
 
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(100, builder.build())
+        notificationManager.notify(Constant.NOTIFICATION_ID_REGION_CHENGE, builder.build())
     }
 
     private fun checkPermissions(): Boolean {

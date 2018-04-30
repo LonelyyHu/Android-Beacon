@@ -71,7 +71,7 @@ class MyApplication: Application(), BootstrapNotifier {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun initNotification() {
-        val channelBeacon = NotificationChannel(MainActivity.CHANNEL_ID, "Channel Beacon", NotificationManager.IMPORTANCE_HIGH)
+        val channelBeacon = NotificationChannel(Constant.NOTIFICATION_CHANNEL_ID, "Channel Beacon", NotificationManager.IMPORTANCE_HIGH)
         channelBeacon.description = "Beacon Notify"
 //        channelBeacon.enableLights(true)
 //        channelBeacon.enableVibration(true)

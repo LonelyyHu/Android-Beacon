@@ -3,10 +3,11 @@
 Beacon   
 https://www.silabs.com/community/blog.entry.html/2016/04/25/bluetooth_ble_beacon-IGMb   
 
-
+Android Beacon Library  
+http://altbeacon.github.io/android-beacon-library/documentation.html  
+http://altbeacon.github.io/android-beacon-library/distance_vs_time.html
 
 ## Reference
-1. http://altbeacon.github.io/android-beacon-library/documentation.html
 1. https://www.jianshu.com/p/aa0a79cd9f03
 1. https://blog.csdn.net/eueheuen/article/details/79095354
 1. https://blog.csdn.net/u013625961/article/details/53906282
